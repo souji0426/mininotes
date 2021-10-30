@@ -7,7 +7,7 @@ use Config::Tiny;
 #iniファイルを処理するのに使っている
 
 use lib "./";
-use common_subroutines;
+#use common_subroutines;
 #共通関数の呼び出し
 
 main();
@@ -15,68 +15,75 @@ main();
 sub main {
   my $setting_ini_path = "./setting.ini";
   my $setting = Config::Tiny->read( $setting_ini_path );
-  my $all_note_dir = $setting->{"common"}->{"all_note_dir"};
+  my $mini_notes_dir = $setting->{"common"}->{"mini_notes_dir"};
 
-  #common_subroutines::catch_all_subfile_tex_file
-  #souji_noteでsubfileで呼び出されているtexファイル、そのtexファイルから呼び出されているtex、
-  #という風に再帰的に呼びだしているtexファイル全てを絶対パスで入手
-  #どのtexファイルでも絶対パスで書くよう習慣づけておくこと
-  my $all_sub_tex_file_paths = catch_all_subfile_tex_file( $all_note_dir );
+  my @not_target_file_and_dir = split( ",", decode( "utf8", $setting->{"common"}->{"ignore_list"} ) );
+  my $target_dir_list = get_target_dir(  $mini_notes_dir, @not_target_file_and_dir );
 
-  #上記のtexファイルたちから「あとで書く」とメモしたものを集める
-  my $data = get_data_of_atodekaku( $setting, $all_sub_tex_file_paths );
-
-  output_data( $all_note_dir, $data );
+  make_bat( $mini_notes_dir, $target_dir_list );
 }
 
-sub get_data_of_atodekaku {
-  my ( $setting, $all_sub_tex_file_paths ) = @_;
-  my $data = {};
-  my $ignore_file =  encode( "cp932", decode( "utf8", $setting->{"check_atode_list"}->{"ignore_file"}) );
-  foreach my $file_path ( @$all_sub_tex_file_paths ) {
-    if ( $file_path eq  $ignore_file  ) {
-      next;
-    }
-    my $line_counter = 0;
-    my $memo = "";
-    my $start_line_counter;
-    my $is_target_line = 0;
-    open( my $fh, "<", $file_path );
-    while( my $line = <$fh> ) {
-      $line_counter++;
-      $line = decode( "cp932", $line );
-      if ( $line eq "%あとで書く\n"  ) {
-        $start_line_counter = sprintf( "%04d", $line_counter );
-      }
-      if ( $is_target_line and $line ne "\\end\{comment\}\n" ) {
-        $memo = $memo . $line;
-      }
-      if ( $line eq "\\begin\{comment\}\n" ) {
-        $is_target_line = 1;
-      } elsif ( $line eq "\\end\{comment\}\n" ) {
-        $data->{$file_path}->{$start_line_counter} = encode( "cp932", $memo );
-        $memo = "";
-        $start_line_counter = 0;
-        $is_target_line = 0;
-      }
-    }
+sub make_bat {
+  my ( $mini_notes_dir, $target_dir_list ) = @_;
+  my $num_of_dir = @$target_dir_list;
+  my $counter = 0;
+  foreach my $dir_name ( @$target_dir_list ) {
+    my $target_file_path = $mini_notes_dir . "/" . $dir_name . "/note.bat";
+    open ( my $fh, ">", $target_file_path );
+    my $scale_factor =  ( $num_of_dir - $counter ) / $num_of_dir;
+    print $fh "mode " . int( 130 * $scale_factor ) . "," . int( 30 * $scale_factor ) . "\n\n";
+    print_common_code( $fh );
+    my $text_for_copy = 'copy /Y "./note.pdf" "./' . $dir_name . '.pdf"' . "\n\n";
+    print $fh $text_for_copy;
+    print $fh 'del "./note.pdf"' . "\n\n";
+    print $fh "exit";
+    close ( $fh );
+    $counter++;
   }
-  return $data;
 }
 
-sub output_data {
-  my ( $target_dir, $data ) = @_;
-  open( my $fh, ">", encode( "cp932", "${target_dir}あとで書くリスト.txt" ) );
-  foreach my $file_path ( keys %$data ) {
-    print $fh $file_path . encode( "cp932", "で見つけたメモ". "-" x 10 . "\n\n" );
-    foreach my $line_counter ( sort keys %{$data->{$file_path}} ) {
-      print  $fh sprintf( "%d", $line_counter ) . encode( "cp932", "行で発見。↓その内容\n" );
-      print $fh $data->{$file_path}->{$line_counter};
-      print $fh "\n";
-    }
-  }
-  close( $fh );
-}
+sub print_common_code {
+  my ( $fh ) = @_;
+  print $fh <<'EOS'
+platex note.tex
 
+pbibtex note -kanji=sjis
+
+platex note.tex
+
+pbibtex note -kanji=sjis
+
+platex note.tex
+
+mendex -S note.idx
+
+mendex -S note.idx
+
+platex note.tex
+
+dvipdfmx note.dvi
+
+del "./note.aux"
+
+del "./note.bbl"
+
+del "./note.idx"
+
+del "./note.ind"
+
+del "./note.log"
+
+del "./note.ilg"
+
+del "./note.out"
+
+del "./note.toc"
+
+del "./note.dvi"
+
+del "./note.blg"
+
+EOS
+}
 
 1;

@@ -1,1 +1,4 @@
-
+#いらないファイル
+**/note.tex
+**/note.bat
+全てのbatを実行する.bat
