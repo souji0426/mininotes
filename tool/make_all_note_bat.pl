@@ -7,7 +7,7 @@ use Config::Tiny;
 #iniファイルを処理するのに使っている
 
 use lib "./";
-#use common_subroutines;
+use common_subroutines;
 #共通関数の呼び出し
 
 main();
@@ -18,7 +18,7 @@ sub main {
   my $mini_notes_dir = $setting->{"common"}->{"mini_notes_dir"};
 
   my @not_target_file_and_dir = split( ",", decode( "utf8", $setting->{"common"}->{"ignore_list"} ) );
-  my $target_dir_list = get_target_dir(  $mini_notes_dir, @not_target_file_and_dir );
+  my $target_dir_list = get_target_dir(  $mini_notes_dir, \@not_target_file_and_dir );
 
   make_bat( $mini_notes_dir, $target_dir_list );
 }
@@ -29,15 +29,17 @@ sub make_bat {
   my $counter = 0;
   foreach my $dir_name ( @$target_dir_list ) {
     my $target_file_path = $mini_notes_dir . "/" . $dir_name . "/note.bat";
-    open ( my $fh, ">", $target_file_path );
+    open ( my $fh, ">", encode( "cp932", $target_file_path ) );
     my $scale_factor =  ( $num_of_dir - $counter ) / $num_of_dir;
     print $fh "mode " . int( 130 * $scale_factor ) . "," . int( 30 * $scale_factor ) . "\n\n";
     print_common_code( $fh );
     my $text_for_copy = 'copy /Y "./note.pdf" "./' . $dir_name . '.pdf"' . "\n\n";
-    print $fh $text_for_copy;
+    my $text_for_backup = 'copy /Y "./' . $dir_name . '.pdf" "C:/Googleドライブ共有用フォルダ/PDFフォルダ/' . $dir_name . '.pdf"' . "\n\n";
+    print $fh encode( "cp932", $text_for_copy );
+    print $fh encode( "cp932", $text_for_backup );
     print $fh 'del "./note.pdf"' . "\n\n";
     print $fh "exit";
-    close ( $fh );
+    close $fh;
     $counter++;
   }
 }
